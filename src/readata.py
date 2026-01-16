@@ -22,22 +22,33 @@ for i in data[:10]: #accessing the first 10 elements
 #plt.title('Visualization of a Single Band')
 #plt.show()
 
-band = data[:, :, 0]
-plt.imshow(band, cmap='viridis')
-plt.title('Visualization of Band 1')
-plt.show()
+band = data[:, :, 0] #first band
 
-rgb_data = data[:, :, [30, 20, 10]]  # R, G, B
+rgb_data = data[:, :, 199]  #RGB
 
-# Normalização simples (0–1)
-if data.shape[2] >= 3:
-    rgb_data = data[:, :, :3]
+if data.shape[2] >= 3: #at least 3 bands
+    rgb_data = data[:, :, :4] #take every row and column of the three first 4
 
-    rgb_min = rgb_data.min()
+    rgb_min = rgb_data.min() #min value of of each band
     rgb_max = rgb_data.max()
     rgb_data = (rgb_data - rgb_min) / (rgb_max - rgb_min)
 
-    plt.imshow(rgb_data)
-    plt.title("Pseudo-RGB image (first 3 bands)")
-    plt.axis('off')
-    plt.show()
+
+#HYPERSPECTRAL IMAGE
+
+
+
+# Subplot 1 - unique band
+plt.subplot(1, 2, 1)   # 1 linha, 2 colunas, posição 1
+plt.imshow(band, cmap='viridis')
+plt.title('Band 0')
+plt.axis('off')
+
+#First 4 band using normalizarion
+plt.subplot(1, 2, 2)   # 1 linha, 2 colunas, posição 2
+plt.imshow(rgb_data)
+plt.title('First 4 bands (normalized)')
+plt.axis('off')
+
+plt.tight_layout()
+plt.show()
