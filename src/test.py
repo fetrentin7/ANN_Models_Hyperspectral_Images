@@ -37,9 +37,9 @@ pca_data = pca_apply(DATA_PATH, 30)
 #creating the training patches
 def create_patches(x, y, size):
     margin = size//2
-    padded_x = np.pad((margin, margin), (margin, margin), (0,0), mode='constant')
+    padded_x = np.pad(x, (margin, margin), (margin, margin), (0,0), mode='constant')
     list = []
-
+    labels = []
     for i in range(margin, padded_x.shape[0] - margin):
         for j in range(margin, padded_x[1] - margin):
             patch = np.zeros((size, size, padded_x.shape[2]))
@@ -47,3 +47,9 @@ def create_patches(x, y, size):
                 for dj in range(size):
                     for dc in range(padded_x.shape[2]):
                         patch[di, dj, dc] = padded_x[i - margin + di, j - margin + dj, dc]
+
+            list.append(patch)
+            labels.append([y - margin, j - margin])
+
+    return np.array(list), np.array(labels)
+
