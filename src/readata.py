@@ -22,22 +22,19 @@ for i in data[:10]: #accessing the first 10 elements
 #plt.title('Visualization of a Single Band')
 #plt.show()
 
-band = data[:, :, 0] #first band
+band = data[:, :, 2] #first band
 
-rgb_data = data[:, :, 199]  #RGB
+rgb_data = data[:, :, 50]  #RGB
 
 if data.shape[2] >= 3: #at least 3 bands
-    rgb_data = data[:, :, :4] #take every row and column of the three first 4
+    rgb_data = data[:, :, :4] #take every row and column of the firsts three elements
 
-    rgb_min = rgb_data.min() #min value of of each band
+    rgb_min = rgb_data.min() #min value of each band
     rgb_max = rgb_data.max()
     rgb_data = (rgb_data - rgb_min) / (rgb_max - rgb_min)
 
 
 #HYPERSPECTRAL IMAGE
-
-
-
 # Subplot 1 - unique band
 plt.subplot(1, 2, 1)   # 1 linha, 2 colunas, posição 1
 plt.imshow(band, cmap='viridis')
