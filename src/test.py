@@ -49,7 +49,22 @@ def create_patches(x, y, size):
                         patch[di, dj, dc] = padded_x[i - margin + di, j - margin + dj, dc]
 
             list.append(patch)
-            labels.append([y - margin, j - margin])
+            labels.append([i - margin, j - margin])
 
     return np.array(list), np.array(labels)
+
+PATCH_SIZE = 15
+patches, patch_label = create_patches(pca_data, labels, PATCH_SIZE)
+#filtering non-zero labels, and sifht to c-1
+non_zero = patch_label > 0
+patch = patches[non_zero]
+patch_label = patch_label[non_zero] - 1
+
+x_training, x_test, y_train, y_test = train_test_split(patches, patch_label, test_size=0.2, random_state=42)
+
+#converting to pytorch tensors --> switch to channelss first (N,C,H,W)
+
+x_training = np.transpose(x_training, (0,3,1,2)).astype(np.float32)
+x_test = np.transpose(x_training, (0,3,1,2)).astype(np.float32)
+
 
