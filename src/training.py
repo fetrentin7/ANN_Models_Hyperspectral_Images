@@ -66,5 +66,8 @@ x_training, x_test, y_train, y_test = train_test_split(patches, patch_label, tes
 
 x_training = np.transpose(x_training, (0,3,1,2)).astype(np.float32)
 x_test = np.transpose(x_training, (0,3,1,2)).astype(np.float32)
+y_train = y_train.astype(np.int64)
+y_test = y_test.astype(np.int64)
 
+num_classes = int(np.unique(patch_label).shape[0])
 
