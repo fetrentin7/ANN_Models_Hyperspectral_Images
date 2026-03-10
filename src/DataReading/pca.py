@@ -16,7 +16,7 @@ print(hsi_array.shape)
 
 # %%
 # Visualize a band
-band = hsi_array[:, :, 150]  # Example band index
+band = hsi_array[:, :, 149]  # Example band index
 plt.imshow(band, cmap='gray')
 plt.title('Band')
 plt.show()
