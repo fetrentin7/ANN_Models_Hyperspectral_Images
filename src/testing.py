@@ -5,6 +5,7 @@ from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
 import torch
 
+from sklearn.metrics import accuracy_score, recall_score
 
 def setup_device():
 
@@ -43,6 +44,94 @@ def create_patches(x, y, size):
             labels.append(y[i - margin, j - margin])
 
     return np.array(list), np.array(labels)
+
+
+def sklearn_random_split(labels, test_size=0.5, random_state=42):
+    train_labels = np.zeros_like(labels)
+    test_labels = np.zeros_like(labels)
+
+    valid_indices = np.argwhere(labels > 0)
+    valid_classes = labels[valid_indices[:, 0], valid_indices[:, 1]]
+
+    train_idx, test_idx = train_test_split(
+        valid_indices,
+        test_size=test_size,
+        random_state=random_state,
+        stratify=valid_classes
+    )
+
+    for r, c in train_idx:
+        train_labels[r, c] = labels[r, c]
+    for r, c in test_idx:
+        test_labels[r, c] = labels[r, c]
+
+    return train_labels, test_labels
+
+
+def extract_split_patches(data_pca, label_map, patch_size):
+    margin = patch_size // 2
+    padded_data = np.pad(data_pca, ((margin, margin), (margin, margin), (0, 0)), mode='constant')
+
+    patches = []
+    y_labels = []
+    valid_coords = np.argwhere(label_map > 0)
+
+    for r, c in valid_coords:
+        patch = padded_data[r: r + patch_size, c: c + patch_size, :]
+        patches.append(patch)
+        y_labels.append(label_map[r, c] - 1)  # Shift to 0-indexed for PyTorch
+
+    return np.array(patches, dtype=np.float32), np.array(y_labels, dtype=np.int64)
+def checkerboard_split(labels, block_size, patch_size):
+    train_labels = np.zeros_like(labels)
+    test_labels = np.zeros_like(labels)
+    margin = patch_size // 2  # The dead zone size (7 pixels)
+    rows, cols = labels.shape
+    for i in range(0, rows, block_size):
+       for j in range(0, cols, block_size):
+           # Determine grid position
+           grid_row = i // block_size
+           grid_col = j // block_size
+
+           # If row + col is even, it's a Train block. Otherwise, Test block.
+           is_train = (grid_row + grid_col) % 2 == 0
+           r_end = min(i + block_size, rows)
+           c_end = min(j + block_size, cols)
+
+           # Apply the dead zone margin to the inside of the block
+           safe_r_start = i + margin
+           safe_r_end = r_end - margin
+           safe_c_start = j + margin
+           safe_c_end = c_end - margin
+
+           #  check if the block hasn't been completely swallowed by the margin, then split between test and training
+           if safe_r_start < safe_r_end and safe_c_start < safe_c_end:
+               if is_train:
+                   train_labels[safe_r_start:safe_r_end, safe_c_start:safe_c_end] = \
+                       labels[safe_r_start:safe_r_end, safe_c_start:safe_c_end]
+               else:
+                   test_labels[safe_r_start:safe_r_end, safe_c_start:safe_c_end] = \
+                       labels[safe_r_start:safe_r_end, safe_c_start:safe_c_end]
+
+    return train_labels, test_labels
+
+""""def half_and_half_split(labels, patch_size=15):
+    Splits the map cleanly in half (Left = Train, Right = Test), with a dead zone in the middle to prevent overlapping patches.
+
+    train_labels = np.zeros_like(labels)
+    test_labels = np.zeros_like(labels)
+
+    rows, cols = labels.shape
+    midpoint = cols // 2
+    buffer = patch_size  # The dead zone trench
+
+    # Left side for training
+    train_labels[:, :midpoint - buffer] = labels[:, :midpoint - buffer]
+
+    # Right side for testing
+    test_labels[:, midpoint + buffer:] = labels[:, midpoint + buffer:]
+
+   return train_labels, test_labels"""
 
 #def disjoint_split(X, y, split_ratio=0.5):
 #    h, w, _ = X.shape
@@ -113,6 +202,7 @@ def results(data_pca, labels, train_labels, test_labels, model, patch_size, usin
     print(f"Final Map Testing Accuracy:  {test_acc * 100:.2f}%")
 
     # --- CREATE SEPARATE ERROR MAPS ---
+
     train_error_map = np.zeros_like(labels)
     train_misclassified = train_mask & (predicted_labels_shifted != train_labels)
     train_error_map[train_misclassified] = 1
@@ -123,14 +213,67 @@ def results(data_pca, labels, train_labels, test_labels, model, patch_size, usin
 
     predicted_labels_masked = predicted_labels_shifted * (labels != 0)
 
-    #
-    #  Accuracy
-    plt.figure(figsize=(8, 5))
-    plt.plot(train_history['val_acc'], label='Validation Accuracy (Epochs)', color='blue')
-    plt.title('Validation Accuracy x Epochs')
-    plt.xlabel('Epochs')
-    plt.ylabel('Accuracy')
-    plt.legend()
+    correct_test = (predicted_labels_shifted[test_mask] == test_labels[test_mask]).sum()
+    total_test = test_mask.sum()
+    test_acc = correct_test / total_test if total_test > 0 else 0
+
+
+    y_test_true = test_labels[test_mask]
+    y_test_pred = predicted_labels_shifted[test_mask]
+
+    oa_test = accuracy_score(y_test_true, y_test_pred)
+    aa_test = recall_score(y_test_true, y_test_pred, average='macro', zero_division=0)
+
+    plt.figure(figsize=(8, 6))
+    metrics = ['Overall Acc (OA)', 'Average Acc (AA)']
+    values = [oa_test * 100, aa_test * 100]
+    color = ['#2ca02c', '#1f77b4']
+
+    bars = plt.bar(metrics, values, color=color, width=0.5)
+    plt.ylim(0, 105)
+    plt.ylabel('Porcentagem (%)')
+    plt.title('Métricas de Desempenho do Modelo (Teste)')
+
+    for bar in bars:
+        yval = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width() / 2, yval + 1, f'{yval:.2f}%',
+                 ha='center', va='bottom', fontweight='bold')
+
+    hardware_text = (
+        f"Eficiência de Hardware:\n"
+        f"• Memória de Vídeo: {memory_used_mb:.2f} MB\n"
+        f"• Tempo Inferência: {inference_time:.4f} s"
+    )
+
+    if train_history is not None and len(train_history['loss']) > 0:
+        epochs = range(1, len(train_history['loss']) + 1)
+        plt.figure(figsize=(12, 5))
+
+        plt.subplot(1, 2, 1)
+        plt.plot(epochs, train_history['loss'], label='Train Loss', marker='.')
+        plt.plot(epochs, train_history['val_loss'], label='Val Loss', marker='.')
+        plt.title('Learning Curve: Loss')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.grid(True)
+
+        plt.subplot(1, 2, 2)
+        plt.plot(epochs, train_history['val_oa'], label='Val OA', marker='.')
+        plt.plot(epochs, train_history['val_aa'], label='Val AA', marker='.')
+        plt.title('Learning Curve: Accuracy')
+        plt.xlabel('Epoch')
+        plt.ylabel('Accuracy')
+        plt.legend()
+        plt.grid(True)
+
+        plt.tight_layout()
+        plt.show()
+
+    plt.figtext(0.15, 0.75, hardware_text, fontsize=10,
+                bbox=dict(facecolor='lightgrey', alpha=0.8, edgecolor='black', boxstyle='round,pad=0.5'))
+
+    plt.tight_layout()
     plt.show()
 
     # Plot the Inference and Error Maps
@@ -179,55 +322,3 @@ def results(data_pca, labels, train_labels, test_labels, model, patch_size, usin
     plt.tight_layout()
     plt.show()
 
-# --- Call the function using the split maps created earlier ---
-
-
-""""def half_and_half_split(labels, patch_size=15):
-    Splits the map cleanly in half (Left = Train, Right = Test), with a dead zone in the middle to prevent overlapping patches.
-
-    train_labels = np.zeros_like(labels)
-    test_labels = np.zeros_like(labels)
-
-    rows, cols = labels.shape
-    midpoint = cols // 2
-    buffer = patch_size  # The dead zone trench
-
-    # Left side for training
-    train_labels[:, :midpoint - buffer] = labels[:, :midpoint - buffer]
-
-    # Right side for testing
-    test_labels[:, midpoint + buffer:] = labels[:, midpoint + buffer:]
-
-   return train_labels, test_labels"""
-def checkerboard_split(labels, block_size, patch_size):
-    train_labels = np.zeros_like(labels)
-    test_labels = np.zeros_like(labels)
-    margin = patch_size // 2  # The dead zone size (7 pixels)
-    rows, cols = labels.shape
-    for i in range(0, rows, block_size):
-       for j in range(0, cols, block_size):
-           # Determine grid position
-           grid_row = i // block_size
-           grid_col = j // block_size
-
-           # If row + col is even, it's a Train block. Otherwise, Test block.
-           is_train = (grid_row + grid_col) % 2 == 0
-           r_end = min(i + block_size, rows)
-           c_end = min(j + block_size, cols)
-
-           # Apply the dead zone margin to the inside of the block
-           safe_r_start = i + margin
-           safe_r_end = r_end - margin
-           safe_c_start = j + margin
-           safe_c_end = c_end - margin
-
-           #  check if the block hasn't been completely swallowed by the margin
-           if safe_r_start < safe_r_end and safe_c_start < safe_c_end:
-               if is_train:
-                   train_labels[safe_r_start:safe_r_end, safe_c_start:safe_c_end] = \
-                       labels[safe_r_start:safe_r_end, safe_c_start:safe_c_end]
-               else:
-                   test_labels[safe_r_start:safe_r_end, safe_c_start:safe_c_end] = \
-                       labels[safe_r_start:safe_r_end, safe_c_start:safe_c_end]
-
-    return train_labels, test_labels
