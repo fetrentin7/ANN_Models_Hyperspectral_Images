@@ -1,6 +1,5 @@
 class DataAugmentation:
-
     def random_crop(self):
-        raise not NotImplementedError
+        raise  NotImplementedError
     def random_flip(self):
-        raise not NotImplementedError
+        raise  NotImplementedError
