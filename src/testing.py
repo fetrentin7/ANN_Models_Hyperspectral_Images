@@ -46,7 +46,7 @@ def create_patches(x, y, size):
     return np.array(list), np.array(labels)
 
 
-def sklearn_random_split(labels, test_size=0.5, random_state=42):
+def random_split(labels, test_size=0.5, random_state=42):
     train_labels = np.zeros_like(labels)
     test_labels = np.zeros_like(labels)
 
@@ -82,6 +82,8 @@ def extract_split_patches(data_pca, label_map, patch_size):
         y_labels.append(label_map[r, c] - 1)  # Shift to 0-indexed for PyTorch
 
     return np.array(patches, dtype=np.float32), np.array(y_labels, dtype=np.int64)
+
+
 def checkerboard_split(labels, block_size, patch_size):
     train_labels = np.zeros_like(labels)
     test_labels = np.zeros_like(labels)
@@ -269,12 +271,6 @@ def results(data_pca, labels, train_labels, test_labels, model, patch_size, usin
 
         plt.tight_layout()
         plt.show()
-
-    plt.figtext(0.15, 0.75, hardware_text, fontsize=10,
-                bbox=dict(facecolor='lightgrey', alpha=0.8, edgecolor='black', boxstyle='round,pad=0.5'))
-
-    plt.tight_layout()
-    plt.show()
 
     # Plot the Inference and Error Maps
     from matplotlib.colors import ListedColormap

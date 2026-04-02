@@ -1,17 +1,10 @@
-import time
 import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA
-from sklearn.model_selection import train_test_split
 import torch
 import torch.nn as nn
-import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
-from scipy.ndimage import binary_dilation
 from CNN import CNN2D
-import torch.nn.functional as F
 
-from testing import checkerboard_split, sklearn_random_split, extract_split_patches, setup_device, load_data, pca_apply, create_patches, results
+from testing import random_split, extract_split_patches, setup_device, load_data, pca_apply, create_patches, results
 
 
 using_gpu = setup_device()
@@ -29,15 +22,15 @@ pca_data, pca_model = pca_apply(data, COMPONENTS)
 
 
 PATCH_SIZE = 11
-#train_labels_map, test_labels_map = sklearn_random_split(labels, test_size=0.5, random_state=42)
+train_labels_map, test_labels_map = random_split(labels, test_size=0.5, random_state=42)
 
-train_labels_map, test_labels_map = checkerboard_split(labels, block_size=24, patch_size=PATCH_SIZE)
+#train_labels_map, test_labels_map = checkerboard_split(labels, block_size=24, patch_size=PATCH_SIZE)
 #
 x_train_all, y_train_all = create_patches(pca_data, train_labels_map, PATCH_SIZE)
 x_test_all, y_test_all = create_patches(pca_data, test_labels_map, PATCH_SIZE)
 
 
-# 2. Extract only the valid patches and shift labels to 0-indexed
+#Extract only the valid patches and shift labels to 0-indexed
 x_training, y_train = extract_split_patches(pca_data, train_labels_map, PATCH_SIZE)
 x_test, y_test = extract_split_patches(pca_data, test_labels_map, PATCH_SIZE)
 
@@ -45,7 +38,6 @@ print(f"Valid Training patches: {len(x_training)} | Valid Testing patches: {len(
 # Filtra o fundo (zeros) e ajusta as classes (0-indexed)
 train_mask_1d = y_train_all > 0
 x_training = x_train_all[train_mask_1d]
-
 print(f"Total de patches para treino: {len(x_training)}")
 y_train = y_train_all[train_mask_1d] - 1
 
@@ -93,17 +85,10 @@ total_samples = len(y_train)
 class_counts = np.bincount(y_train, minlength=num_classes)
 class_counts = np.where(class_counts == 0, 1, class_counts)
 
-#weights = np.log(total_samples / (class_counts + 1e-6))
-#weights = weights / np.sum(weights) * num_classes # Normaliza
-#
+
 #class_weights = torch.tensor(weights, dtype=torch.float32).to(using_gpu)
-#weights = total_samples / (num_classes * class_counts)
-#class_weights = torch.tensor(weights, dtype=torch.float32).to(using_gpu)
-#
 ## Loss and Optimizer
-##criterion = nn.CrossEntropyLoss(weight=class_weights).to(using_gpu)
 #criterion = nn.CrossEntropyLoss().to(using_gpu)
-#optimizer = optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-3)
 
 weights = 1.0 / (class_counts + 1)
 weights = weights / weights.sum() * num_classes
@@ -147,16 +132,16 @@ def evaluate(loader):
             for i in range(len(yb)):
                 label = yb[i].item()
                 class_total[label] += 1
-                if preds[i].item() == label:
+                if preds[i].item() ==  label:
                     class_correct[label] += 1
 
     if total == 0:
         return 0.0, 0.0, 0.0, 0.0
 
-    # 🔹 OA
+    #  OA
     oa = correct / total
 
-    # 🔹 AA
+    #  AA
     class_acc = np.divide(class_correct, class_total, out=np.zeros_like(class_correct), where=class_total != 0)
     aa = np.mean(class_acc)
 
@@ -196,8 +181,6 @@ for epoch in range(1, EPOCHS + 1):
           f'val_loss={val_loss:.4f} | '
           f'OA={val_oa:.4f} | '
           f'AA={val_aa:.4f}')
-
-
 
 results(pca_data, labels, train_labels_map, test_labels_map, model, PATCH_SIZE, using_gpu, train_history)
 
