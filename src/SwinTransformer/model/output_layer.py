@@ -1,4 +1,3 @@
-
 class OutputLayer:
     def global_average_pooling(self):
         raise NotImplementedError
