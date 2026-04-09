@@ -79,7 +79,7 @@ in_channel = pca_data.shape[-1]
 model = CNN2D(channels=in_channel, classes=num_classes).to(using_gpu)
 
 # Calculate class weights for imbalanced data
-#class_counts = np.where(class_counts == 0, 1, class_counts) # Prevent division by zero
+#class_counts = np.whtuere(class_counts == 0, 1, class_counts) # Prevent division by zero
 total_samples = len(y_train)
 
 class_counts = np.bincount(y_train, minlength=num_classes)

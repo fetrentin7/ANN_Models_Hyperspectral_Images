@@ -11,3 +11,4 @@ class DataAugmentation:
         transform = transforms.RandomHorizontalFlip(p=0.5)
         flip = transform(x)
         return flip
+
