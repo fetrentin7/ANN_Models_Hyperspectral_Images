@@ -7,14 +7,14 @@ class PatchLayer:
         self.patch_sizeY = patch_size[1]
         self.emb = embed_dim
         self.in_channels = in_channels
-        nn.Conv2d(
+        self.projection = nn.Conv2d(
             in_channels = self.in_channels,  #spectral bands
             out_channels = embed_dim,
-            kernel_size = self.patch_sizeX,  # patch size from article
+            kernel_size = self.patch_sizeX,  # patch size
             stride = 2 # moves 2 pixels = no overlap, halves dimensions
         )
 
-        self.projection = nn.Conv2d()
+
     def extract_patch(self, x):
         return self.projection(x)
 

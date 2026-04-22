@@ -203,8 +203,6 @@ def results(data_pca, labels, train_labels, test_labels, model, patch_size, usin
     print(f"Final Map Training Accuracy: {train_acc * 100:.2f}%")
     print(f"Final Map Testing Accuracy:  {test_acc * 100:.2f}%")
 
-    # --- CREATE SEPARATE ERROR MAPS ---
-
     train_error_map = np.zeros_like(labels)
     train_misclassified = train_mask & (predicted_labels_shifted != train_labels)
     train_error_map[train_misclassified] = 1
