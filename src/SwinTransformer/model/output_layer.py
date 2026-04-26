@@ -1,5 +1,5 @@
 import torch.nn as nn
-class OutputLayer:
+class OutputLayer(nn.Module):
     def __init__(self, dim, num_classes):
         super().__init__()
         self.norm = nn.LayerNorm(dim)
@@ -7,6 +7,6 @@ class OutputLayer:
 
     def forward(self, x):
         x = self.norm(x)
-        x = x.mean(dim=1)  # global average pooling
-        x = self.dense(x)  # dense layer
-        return x  # softmax applied in loss function
+        x = x.mean(dim=1)
+        x = self.dense(x)
+        return x

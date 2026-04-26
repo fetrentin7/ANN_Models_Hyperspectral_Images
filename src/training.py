@@ -3,7 +3,6 @@ import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
 from CNN import CNN2D
-
 from testing import random_split, extract_split_patches, setup_device, load_data, pca_apply, create_patches, results
 
 

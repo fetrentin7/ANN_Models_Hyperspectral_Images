@@ -1,17 +1,17 @@
 import torch.nn as nn
 import torch
-class PatchLayer:
+class PatchLayer(nn.Module):
     def __init__(self, patch_size, in_channels, embed_dim):
-
+        super().__init__()
         self.patch_sizeX = patch_size[0]
         self.patch_sizeY = patch_size[1]
         self.emb = embed_dim
         self.in_channels = in_channels
         self.projection = nn.Conv2d(
-            in_channels = self.in_channels,  #spectral bands
-            out_channels = embed_dim,
-            kernel_size = self.patch_sizeX,  # patch size
-            stride = 2 # moves 2 pixels = no overlap, halves dimensions
+            in_channels=self.in_channels,
+            out_channels=self.emb,
+            kernel_size=(self.patch_sizeX, self.patch_sizeY),
+            stride=(self.patch_sizeX, self.patch_sizeY)
         )
 
 
