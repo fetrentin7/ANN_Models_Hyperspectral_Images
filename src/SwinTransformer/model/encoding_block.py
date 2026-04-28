@@ -6,8 +6,6 @@ from ANN_Models_Hyperspectral_Images.src.SwinTransformer.attention.shifted_windo
 
 class SwinTransformerBlock(nn.Module):
 
-    # Stage with W-MSA (Window Multi-Head Self-Attention)
-
     def __init__(self, dim, res, win, shift):
         super().__init__()
         self.dim = dim
