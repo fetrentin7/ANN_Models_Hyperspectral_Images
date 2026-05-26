@@ -21,13 +21,22 @@ class SwinTransformer(nn.Module):
             SwinTransformerBlock(dim=embed_dim, res=self.res, win=window_size, shift=window_size // 2)
         )
         self.merge1 = PatchMerging(dim=embed_dim)
-        self.output = OutputLayer(dim=embed_dim * 2, num_classes=num_classes)
 
+        self.stage2 = nn.Sequential(
+            SwinTransformerBlock(dim=embed_dim * 2, res=(self.res[0] // 2, self.res[1] // 2), win=window_size, shift=0),
+            SwinTransformerBlock(dim=embed_dim * 2, res=(self.res[0] // 2, self.res[1] // 2), win=window_size,
+                                 shift=window_size // 2)
+        )
+        self.merge2 = PatchMerging(dim=embed_dim * 2)
+
+        self.output = OutputLayer(dim=embed_dim * 4, num_classes=num_classes)
     def forward(self, x):
         x = self.patch_layer.extract_patch(x)
         x = self.patch_layer.embedding_patch(x)
         x = self.stage1(x)
         x = self.merge1(x, self.res[0], self.res[1])  # need H, W here
+        x = self.stage2(x)
+        x = self.merge2(x, self.res[0] // 2, self.res[1] // 2)
         return self.output(x)
 
 
