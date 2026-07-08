@@ -13,7 +13,7 @@ class InputLayer:
 
     def data_shape(self, X):
         X = torch.tensor(X, dtype=torch.float32)
-        X = X.permute(2,0,1) # [H, W, Spectral] → [Spectral, H, W]
-        X = X.unsqueeze(0) #/[1,H, W, Spectral] → [Spectral, H, W]
+        X = X.permute(2,0,1) # [H, W, Spectral] - > [Spectral, H, W]
+        X = X.unsqueeze(0) # adiciona dim de batch ->[S, H, W] → [1, S, H, W]
         return X
 

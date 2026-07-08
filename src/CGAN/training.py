@@ -16,6 +16,7 @@ using_gpu = setup_device()
 #DATA_PATH = r"D:/Univali/TCC3/ANN_Models_Hyperspectral_Images/src/Datasets/Indian_Pines/indianpinearray.npy"
 #LABEL_PATH = r"D:/Univali/TCC3/ANN_Models_Hyperspectral_Images/src/Datasets/Indian_Pines/IPgt.npy"
 
+
 DATASET, DATA_PATH, LABEL_PATH, CLASS_NAMES = choose_dataset()
 data, labels = load_data(DATA_PATH, LABEL_PATH)
 best_score = 0.0
@@ -41,19 +42,19 @@ y_test     = y_test.astype(np.int64)
 train_ds = TensorDataset(torch.from_numpy(x_training), torch.from_numpy(y_training))
 test_ds  = TensorDataset(torch.from_numpy(x_test),     torch.from_numpy(y_test))
 
-BATCH_SIZE = 2048
+BATCH_SIZE = 1024
 train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True,  drop_last=False)
 test_loader  = DataLoader(test_ds,  batch_size=BATCH_SIZE, shuffle=False, drop_last=False)
 
-# ---- CGAN
+#CGAN
 num_classes = int(np.max(labels))
 noise_dim   = 100
-λ           = 1.0
+weight        = 1.0
 
 G = Generator(noise_dim=noise_dim, num_classes=num_classes, patch_size=PATCH_SIZE, in_channels=COMPONENTS).to(using_gpu)
 D = Discriminator(in_channels=COMPONENTS, patch_size=PATCH_SIZE, num_classes=num_classes).to(using_gpu)
 
-opt_G = torch.optim.Adam(G.parameters(), lr=1e-4, betas=(0.5, 0.999))
+opt_G = torch.optim.Adam(G.parameters(), lr=2e-4, betas=(0.5, 0.999))
 opt_D = torch.optim.Adam(D.parameters(), lr=1e-4, betas=(0.5, 0.999))
 
 class_counts = np.bincount(y_train, minlength=num_classes)
@@ -64,6 +65,24 @@ class_weights = torch.tensor(weights, dtype=torch.float32).to(using_gpu)
 adversarial_loss    = nn.BCELoss()
 classification_loss = nn.CrossEntropyLoss(weight=class_weights)
 
+from torchinfo import summary
+
+# Discriminador (recebe imagem)
+print("=== DISCRIMINADOR ===")
+summary(D, input_size=(1, COMPONENTS, PATCH_SIZE, PATCH_SIZE))
+
+# Gerador (recebe ruído + rótulo)
+print("=== GERADOR ===")
+z = torch.randn(1, noise_dim).to(using_gpu)
+lbl = torch.zeros(1, dtype=torch.long).to(using_gpu)
+summary(G, input_data=(z, lbl))
+
+
+sched_G = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    opt_G, mode='max', factor=0.5, patience=15, min_lr=1e-6)
+sched_D = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    opt_D, mode='max', factor=0.5, patience=15, min_lr=1e-6)
+
 class DiscriminatorClassifier(nn.Module):
     def __init__(self, discriminator):
         super().__init__()
@@ -73,7 +92,7 @@ class DiscriminatorClassifier(nn.Module):
         _, class_pred = self.D(x)
         return class_pred
 
-# ---- Evaluate ----
+# Evaluate
 def evaluate(loader):
     D.eval()
     correct, total, loss_sum = 0, 0, 0.0
@@ -108,11 +127,11 @@ def evaluate(loader):
     aa = np.mean(class_acc)
     return loss_sum / total, oa, aa, class_acc
 
-# ---- Training loop ----
-EPOCHS = 60
+#training
+EPOCHS = 700
 train_history = {'loss': [], 'g_loss': [], 'val_loss': [], 'val_oa': [], 'val_aa': []}
 best_score = 0.0
-PATIENCE=20
+PATIENCE= 150
 MIN = 0.001
 best_model_state = None
 for epoch in range(1, EPOCHS + 1):
@@ -126,7 +145,7 @@ for epoch in range(1, EPOCHS + 1):
         real = torch.ones(B, 1).to(using_gpu)
         fake = torch.zeros(B, 1).to(using_gpu)
 
-        # ---------- Train Discriminator ----------
+        #Train Discriminator
         opt_D.zero_grad()
         real_validity, real_class = D(xb)
         d_real = adversarial_loss(real_validity, real)
@@ -137,18 +156,18 @@ for epoch in range(1, EPOCHS + 1):
         fake_validity, _ = D(fake_patches)
         d_fake = adversarial_loss(fake_validity, fake)
 
-        d_loss = d_real + d_fake + λ * d_cls
+        d_loss = d_real + d_fake + weight * d_cls
         d_loss.backward()
         torch.nn.utils.clip_grad_norm_(D.parameters(), max_norm=1.0)
         opt_D.step()
 
-        # ---------- Train Generator ----------
+        # Train Generator
         opt_G.zero_grad()
         z = torch.randn(B, noise_dim).to(using_gpu)
         gen_patches = G(z, yb, xb)
         fake_validity, fake_class = D(gen_patches)
 
-        g_loss = adversarial_loss(fake_validity, real) + λ * classification_loss(fake_class, yb)
+        g_loss = adversarial_loss(fake_validity, real) + weight * classification_loss(fake_class, yb)
         g_loss.backward()
         torch.nn.utils.clip_grad_norm_(G.parameters(), max_norm=1.0)
         opt_G.step()
@@ -156,10 +175,12 @@ for epoch in range(1, EPOCHS + 1):
         d_running += d_loss.item()
         g_running += g_loss.item()
 
-    # ---------- Evaluation ----------
+    #Evaluation
     val_loss, val_oa, val_aa, class_acc = evaluate(test_loader)
 
     score = (val_oa + val_aa) / 2
+    sched_G.step(score)
+    sched_D.step(score)
     if score > (best_score + MIN):
         best_score = score
         best_D_state = {k: v.clone() for k, v in D.state_dict().items()}
@@ -206,7 +227,7 @@ print(f"Test pixels:  {(test_labels_map > 0).sum()}")
 print(f"Train patches: {len(x_training)}")
 print(f"Test patches:  {len(x_test)}")
 
-# ---------- Load best D and run results ----------
+#  Load best Discriminator and run results
 print(f"\nBest epoch: {best_epoch} | OA={best_oa:.4f} | AA={best_aa:.4f} | score={best_score:.4f}")
 D.load_state_dict(best_D_state)
 
@@ -214,4 +235,5 @@ D.load_state_dict(best_D_state)
 D_clf = DiscriminatorClassifier(D)
 
 results(pca_data, labels, train_labels_map, test_labels_map,
-        D_clf, PATCH_SIZE, using_gpu, train_history)
+        D_clf, PATCH_SIZE, using_gpu, train_history,
+        class_names=CLASS_NAMES)

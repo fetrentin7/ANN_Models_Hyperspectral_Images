@@ -24,7 +24,7 @@ using_gpu = setup_device()
 DATASET, DATA_PATH, LABEL_PATH, CLASS_NAMES = choose_dataset()
 data, labels = load_data(DATA_PATH, LABEL_PATH)
 COMPONENTS = 50
-PATCH_SIZE = 32
+PATCH_SIZE = 32 #ANTES TAVA 64 NO KSC
 
 pca_data, pca_model = pca_apply(data, COMPONENTS)
 train_labels_map, test_labels_map = random_split(labels, test_size=0.5, random_state=42)
@@ -33,6 +33,8 @@ x_training, y_train = extract_split_patches(pca_data, train_labels_map, PATCH_SI
 x_test, y_test = extract_split_patches(pca_data, test_labels_map, PATCH_SIZE)
 
 x_training = np.transpose(x_training, (0, 3, 1, 2)).astype(np.float32)
+print(f"Valid Training patches: {len(x_training)} ...")
+
 x_test = np.transpose(x_test, (0, 3, 1, 2)).astype(np.float32)
 y_training = y_train.astype(np.int64)
 y_test = y_test.astype(np.int64)
@@ -40,7 +42,7 @@ y_test = y_test.astype(np.int64)
 train_ds = TensorDataset(torch.from_numpy(x_training), torch.from_numpy(y_training))
 test_ds = TensorDataset(torch.from_numpy(x_test), torch.from_numpy(y_test))
 
-BATCH_SIZE = 4096
+BATCH_SIZE = 2048
 train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, drop_last=False)
 test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False, drop_last=False)
 
@@ -104,8 +106,8 @@ def evaluate(loader):
 
     return loss_sum / total, oa, aa, class_acc
 EPOCHS = 200
-MIN = 0.001
-PATIENCE = 20
+MIN = 0.01
+PATIENCE = 50
 train_history = {'loss': [], 'val_loss': [], 'val_oa': [], 'val_aa': []}
 
 for epoch in range(1, EPOCHS + 1):
@@ -167,7 +169,7 @@ print(f"Test pixels:  {(test_labels_map > 0).sum()}")
 print(f"Train patches: {len(x_training)}")
 print(f"Test patches:  {len(x_test)}")
 
-# Now run final evaluation + plots
+
 results(pca_data, labels, train_labels_map, test_labels_map,
         model, PATCH_SIZE, using_gpu, train_history,
         class_names=CLASS_NAMES)

@@ -5,7 +5,7 @@ from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
 import torch
 import seaborn as sns
-from sklearn.metrics import accuracy_score, recall_score, confusion_matrix
+from sklearn.metrics import accuracy_score, recall_score, confusion_matrix, average_precision_score,precision_recall_curve
 import xai
 import pandas as pd
 from sklearn.metrics import classification_report, roc_curve, auc
@@ -21,10 +21,24 @@ IP_CLASSES = ["Alfalfa", "Corn-notill", "Corn-mintill", "Corn",
 PU_CLASSES = ["Asphalt", "Meadows", "Gravel", "Trees",
               "Painted-metal-sheets", "Bare-Soil", "Bitumen",
               "Self-Blocking-Bricks", "Shadows"]
+KSC_CLASSES = ["Scrub",
+               "Willow swamp",
+               "Cabbage palm hammock",
+               "Cabbage palm/oak hammock",
+               "Slash pine",
+               "Oak/broadleaf hammock",
+               "Hardwood swamp",
+               "Graminoid marsh",
+               "Spartina marsh",
+               "Cattail marsh",
+               "Salt marsh",
+               "Mud flats",
+               "Water"]
 def setup_device():
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print('Using device: ', device)
+
     return device
 
 
@@ -46,19 +60,19 @@ def pca_apply(X, n_components):
     return new_X, pca
 
 # creating the training patches
-def create_patches(x, y, size):
-    margin = size // 2
-    padded_x = np.pad(x, ((margin, margin), (margin, margin), (0, 0)), mode='constant')
-    labels = []
-    list = []
-    for i in range(margin, padded_x.shape[0] - margin):
-        for j in range(margin, padded_x.shape[1] - margin):
-            patch = padded_x[i - margin:i + margin + 1, j - margin:j + margin + 1, :]
-            list.append(patch)
-            labels.append(y[i - margin, j - margin])
-
-    return np.array(list), np.array(labels)
-
+#def create_patches(x, y, size):
+#    margin = size // 2
+#    padded_x = np.pad(x, ((margin, margin), (margin, margin), (0, 0)), mode='constant')
+#    labels = []
+#    list = []
+#    for i in range(margin, padded_x.shape[0] - margin):
+#        for j in range(margin, padded_x.shape[1] - margin):
+#            patch = padded_x[i - margin:i + margin + 1, j - margin:j + margin + 1, :]
+#            list.append(patch)
+#            labels.append(y[i - margin, j - margin])
+#
+#    return np.array(list), np.array(labels)
+#
 
 def random_split(labels, test_size=0.5, random_state=42):
     train_labels = np.zeros_like(labels)
@@ -98,38 +112,38 @@ def extract_split_patches(data_pca, label_map, patch_size):
     return np.array(patches, dtype=np.float32), np.array(y_labels, dtype=np.int64)
 
 
-def checkerboard_split(labels, block_size, patch_size):
-    train_labels = np.zeros_like(labels)
-    test_labels = np.zeros_like(labels)
-    margin = patch_size // 2  # The dead zone size (7 pixels)
-    rows, cols = labels.shape
-    for i in range(0, rows, block_size):
-       for j in range(0, cols, block_size):
-           # Determine grid position
-           grid_row = i // block_size
-           grid_col = j // block_size
-
-           # If row + col is even, it's a Train block. Otherwise, Test block.
-           is_train = (grid_row + grid_col) % 2 == 0
-           r_end = min(i + block_size, rows)
-           c_end = min(j + block_size, cols)
-
-           # Apply the dead zone margin to the inside of the block
-           safe_r_start = i + margin
-           safe_r_end = r_end - margin
-           safe_c_start = j + margin
-           safe_c_end = c_end - margin
-
-           #  check if the block hasn't been completely swallowed by the margin, then split between test and training
-           if safe_r_start < safe_r_end and safe_c_start < safe_c_end:
-               if is_train:
-                   train_labels[safe_r_start:safe_r_end, safe_c_start:safe_c_end] = \
-                       labels[safe_r_start:safe_r_end, safe_c_start:safe_c_end]
-               else:
-                   test_labels[safe_r_start:safe_r_end, safe_c_start:safe_c_end] = \
-                       labels[safe_r_start:safe_r_end, safe_c_start:safe_c_end]
-
-    return train_labels, test_labels
+#def checkerboard_split(labels, block_size, patch_size):
+#    train_labels = np.zeros_like(labels)
+#    test_labels = np.zeros_like(labels)
+#    margin = patch_size // 2  # The dead zone size (7 pixels)
+#    rows, cols = labels.shape
+#    for i in range(0, rows, block_size):
+#       for j in range(0, cols, block_size):
+#           # Determine grid position
+#           grid_row = i // block_size
+#           grid_col = j // block_size
+#
+#           # If row + col is even, it's a Train block. Otherwise, Test block.
+#           is_train = (grid_row + grid_col) % 2 == 0
+#           r_end = min(i + block_size, rows)
+#           c_end = min(j + block_size, cols)
+#
+#           # Apply the dead zone margin to the inside of the block
+#           safe_r_start = i + margin
+#           safe_r_end = r_end - margin
+#           safe_c_start = j + margin
+#           safe_c_end = c_end - margin
+#
+#           #  check if the block hasn't been completely swallowed by the margin, then split between test and training
+#           if safe_r_start < safe_r_end and safe_c_start < safe_c_end:
+#               if is_train:
+#                   train_labels[safe_r_start:safe_r_end, safe_c_start:safe_c_end] = \
+#                       labels[safe_r_start:safe_r_end, safe_c_start:safe_c_end]
+#               else:
+#                   test_labels[safe_r_start:safe_r_end, safe_c_start:safe_c_end] = \
+#                       labels[safe_r_start:safe_r_end, safe_c_start:safe_c_end]
+#
+#    return train_labels, test_labels
 
 """"def half_and_half_split(labels, patch_size=15):
     Splits the map cleanly in half (Left = Train, Right = Test), with a dead zone in the middle to prevent overlapping patches.
@@ -149,20 +163,16 @@ def checkerboard_split(labels, block_size, patch_size):
 
    return train_labels, test_labels"""
 
-#def disjoint_split(X, y, split_ratio=0.5):
-#    h, w, _ = X.shape
-#    split_col = int(w * split_ratio)
-#
-#    # esquerda = treino
-#    X_train = X[:, :split_col, :]
-#    y_train = y[:, :split_col]
-#
-#    # direita = teste
-#    X_test = X[:, split_col:, :]
-#    y_test = y[:, split_col:]
-#
-#    return X_train, X_test, y_train, y_test
-
+def disjoint_split(labels, split_ratio=0.5, buffer=None):
+    train_labels = np.zeros_like(labels)
+    test_labels = np.zeros_like(labels)
+    h, w = labels.shape
+    split_col = int(w * split_ratio)
+    if buffer is None:
+        buffer = 0
+    train_labels[:, :split_col - buffer] = labels[:, :split_col - buffer]
+    test_labels[:, split_col + buffer:] = labels[:, split_col + buffer:]
+    return train_labels, test_labels
 
 def results(data_pca, labels, train_labels, test_labels, model, patch_size,
             using_gpu, train_history=None, class_names=None):
@@ -170,10 +180,10 @@ def results(data_pca, labels, train_labels, test_labels, model, patch_size,
     margin = patch_size // 2
     padded = np.pad(data_pca, ((margin, margin), (margin, margin), (0, 0)), mode='constant')
 
-    # ---------- Extract all patches across the entire map ----------
+    #  Extract all patches across the entire map
     H, W = labels.shape
     total_pixels = H * W
-    CHUNK_SIZE = 256  # patches per chunk — adjust if needed
+    CHUNK_SIZE = 256
 
     print(f"DEBUG: processing {total_pixels} patches in chunks of {CHUNK_SIZE}")
 
@@ -211,7 +221,10 @@ def results(data_pca, labels, train_labels, test_labels, model, patch_size,
 
     inference_time = time.time() - start_time
     print(f"Total Inference Time: {inference_time:.4f} seconds")
-    # FIX 1: don't crash on CPU
+
+    inference_per_sample = inference_time / total_pixels
+    print(f"Inference per sample: {inference_per_sample * 1000:.4f} ms")
+
     if using_gpu.type == 'cuda':
         memory_used_mb = torch.cuda.max_memory_allocated(using_gpu) / (1024 * 1024)
         print(f"Peak GPU Memory Used: {memory_used_mb:.2f} MB")
@@ -248,7 +261,7 @@ def results(data_pca, labels, train_labels, test_labels, model, patch_size,
 
     predicted_labels_masked = predicted_labels_shifted * (labels != 0)
 
-    # ---------- Prepare arrays for metrics (test set only) ----------
+    # repare arrays for metrics
     y_test_true = test_labels[test_mask]
     y_test_pred = predicted_labels_shifted[test_mask]
 
@@ -266,9 +279,7 @@ def results(data_pca, labels, train_labels, test_labels, model, patch_size,
     if class_names is None:
         class_names = IP_CLASSES[:num_classes]
 
-    # ===========================================================
     # PLOT 1: OA / AA bar chart with hardware efficiency caption
-    # ===========================================================
     fig, ax = plt.subplots(figsize=(8, 6))
     metrics_labels = ['Overall Acc (OA)', 'Average Acc (AA)']
     values = [oa_test * 100, aa_test * 100]
@@ -284,7 +295,6 @@ def results(data_pca, labels, train_labels, test_labels, model, patch_size,
         ax.text(bar.get_x() + bar.get_width() / 2, yval + 1, f'{yval:.2f}%',
                 ha='center', va='bottom', fontweight='bold')
 
-    # FIX 3: actually display the hardware text
     hardware_text = (
         f"Eficiência de Hardware:\n"
         f"• Memória de Vídeo: {memory_used_mb:.2f} MB\n"
@@ -296,9 +306,9 @@ def results(data_pca, labels, train_labels, test_labels, model, patch_size,
     plt.tight_layout()
     plt.show()  # FIX 5
 
-    # ===========================================================
+
     # PLOT 2: Learning curves
-    # ===========================================================
+
     if train_history is not None and len(train_history['loss']) > 0:
         epochs = range(1, len(train_history['loss']) + 1)
         plt.figure(figsize=(12, 5))
@@ -324,9 +334,9 @@ def results(data_pca, labels, train_labels, test_labels, model, patch_size,
         plt.tight_layout()
         plt.show()
 
-    # ===========================================================
+
     # PLOT 3: Inference and Error Maps
-    # ===========================================================
+
     error_cmap = ListedColormap(['white', 'red'])
     plt.figure(figsize=(15, 10))
 
@@ -390,6 +400,11 @@ def results(data_pca, labels, train_labels, test_labels, model, patch_size,
 
     # --- ROC per class (sklearn — xai is binary-only) ---
     y_true_bin = label_binarize(y_test_true_0idx, classes=list(range(num_classes)))
+
+    auc_pr = average_precision_score(y_true_bin, y_test_proba, average='macro')
+    print(f"AUC-PR (macro): {auc_pr:.4f}")
+
+
     plt.figure(figsize=(10, 8))
     for i in range(num_classes):
         if y_true_bin[:, i].sum() == 0:
@@ -403,6 +418,24 @@ def results(data_pca, labels, train_labels, test_labels, model, patch_size,
     plt.title('Per-class ROC')
     plt.legend(loc='lower right', fontsize=8, ncol=2)
     plt.grid(alpha=0.3);
+    plt.tight_layout()
+    plt.show()
+
+    # --- Curva Precisão-Revocação (AUC-PR) por classe ---
+
+    plt.figure(figsize=(10, 8))
+    for i in range(num_classes):
+        if y_true_bin[:, i].sum() == 0:
+            continue
+        precisao, revocacao, _ = precision_recall_curve(y_true_bin[:, i], y_test_proba[:, i])
+        ap = average_precision_score(y_true_bin[:, i], y_test_proba[:, i])
+        plt.plot(revocacao, precisao, lw=1.5,
+                 label=f'{class_names[i]} (AP={ap:.3f})')
+    plt.xlabel('Revocação')
+    plt.ylabel('Precisão')
+    plt.title(f'Curva Precisão-Revocação por classe (AUC-PR macro={auc_pr:.3f})')
+    plt.legend(loc='lower left', fontsize=8, ncol=2)
+    plt.grid(alpha=0.3)
     plt.tight_layout()
     plt.show()
 
@@ -430,32 +463,6 @@ def results(data_pca, labels, train_labels, test_labels, model, patch_size,
     plt.show()
 
     # --- Classification report ---
-    print("\nClassification Report:")
-    print(classification_report(y_test_true_0idx, y_test_pred_0idx,
-                                target_names=class_names,
-                                zero_division=0, digits=3))
-
-    # --- XAI 5) Confusion matrix ---
-    try:
-        xai.confusion_matrix_plot(y_test_true_0idx, y_test_pred_0idx, scaled=True)
-        plt.title(f"Confusion Matrix (xai)  OA={oa_test * 100:.2f}%  AA={aa_test * 100:.2f}%")
-        plt.tight_layout()
-        plt.show()
-    except Exception as e:
-        print(f"xai.confusion_matrix_plot failed: {e}")
-        # Fallback: seaborn version
-        class_ids = np.unique(np.concatenate([y_test_true, y_test_pred]))
-        cm = confusion_matrix(y_test_true, y_test_pred, labels=class_ids)
-        plt.figure(figsize=(10, 8))
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
-                    xticklabels=class_ids, yticklabels=class_ids)
-        plt.xlabel('Predicted class');
-        plt.ylabel('True class')
-        plt.title(f'Confusion Matrix (fallback)  OA={oa_test * 100:.2f}%  AA={aa_test * 100:.2f}%')
-        plt.tight_layout()
-        plt.show()
-
-    # --- Classification report (sklearn, kept for textual detail) ---
     print("\nClassification Report:")
     print(classification_report(y_test_true_0idx, y_test_pred_0idx,
                                 target_names=class_names,

@@ -6,7 +6,6 @@ from model.encoding_block import SwinTransformerBlock
 from model.patch_merging import PatchMerging
 from model.output_layer import OutputLayer
 
-
 class SwinTransformer(nn.Module):
     def __init__(self, in_channels, num_classes, img_size=32, patch_size=4, embed_dim=96, window_size=4):
         super().__init__()

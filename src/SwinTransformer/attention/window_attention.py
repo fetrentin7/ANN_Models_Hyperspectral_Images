@@ -67,7 +67,6 @@ class WindowAttention(nn.Module):
             self.window_size,
             dim
         )
-
         out = out.permute(0, 1, 3, 2, 4, 5).reshape(B, H, W, dim)
         out = out.reshape(B, H * W, dim)
         return out
