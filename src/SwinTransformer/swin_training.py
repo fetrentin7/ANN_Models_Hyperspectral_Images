@@ -4,7 +4,7 @@ import torch.nn as nn
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ANN_Models_Hyperspectral_Images.src.load_dataset import choose_dataset
-
+from model.enconding_conv import SwinTransformerBlockConv
 from torch.utils.data import TensorDataset, DataLoader
 
 from swin_transformer import SwinTransformer
@@ -24,7 +24,7 @@ using_gpu = setup_device()
 DATASET, DATA_PATH, LABEL_PATH, CLASS_NAMES = choose_dataset()
 data, labels = load_data(DATA_PATH, LABEL_PATH)
 COMPONENTS = 50
-PATCH_SIZE = 32 #ANTES TAVA 64 NO KSC
+PATCH_SIZE = 64  #ANTES TAVA 64 NO KSC
 
 pca_data, pca_model = pca_apply(data, COMPONENTS)
 train_labels_map, test_labels_map = random_split(labels, test_size=0.5, random_state=42)
@@ -42,13 +42,22 @@ y_test = y_test.astype(np.int64)
 train_ds = TensorDataset(torch.from_numpy(x_training), torch.from_numpy(y_training))
 test_ds = TensorDataset(torch.from_numpy(x_test), torch.from_numpy(y_test))
 
-BATCH_SIZE = 2048
+BATCH_SIZE = 1024
 train_loader = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, drop_last=False)
 test_loader = DataLoader(test_ds, batch_size=BATCH_SIZE, shuffle=False, drop_last=False)
 
 num_classes = int(np.max(labels))
-model = SwinTransformer(in_channels=COMPONENTS, num_classes=num_classes, img_size=PATCH_SIZE).to(using_gpu)
 
+LPU_MODE = "1d"
+LPU_KERNEL = 3
+USE_IRFFN = False
+
+model = SwinTransformer(in_channels=COMPONENTS, num_classes=num_classes,
+                        img_size=PATCH_SIZE,
+                        lpu_mode=LPU_MODE, lpu_kernel=LPU_KERNEL,
+                        use_irffn=USE_IRFFN).to(using_gpu)
+print(model.stage1[0].lpu.dw)
+print(sum(p.numel() for p in model.parameters()))
 class_counts = np.bincount(y_train, minlength=num_classes)
 class_counts = np.where(class_counts == 0, 1, class_counts)
 weights = 1.0 / (class_counts + 1)

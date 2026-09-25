@@ -5,26 +5,30 @@ from model.patch_layer import PatchLayer
 from model.encoding_block import SwinTransformerBlock
 from model.patch_merging import PatchMerging
 from model.output_layer import OutputLayer
-
+from model.enconding_conv import SwinTransformerBlockConv
 class SwinTransformer(nn.Module):
-    def __init__(self, in_channels, num_classes, img_size=32, patch_size=4, embed_dim=96, window_size=4):
+    def __init__(self, in_channels, num_classes, img_size=32, patch_size=4,
+                 embed_dim=96, window_size=4, lpu_mode=None, lpu_kernel=3, use_irffn=False):
+
         super().__init__()
 
         self.patch_layer = PatchLayer(patch_size=(patch_size, patch_size),
                                       in_channels=in_channels, embed_dim=embed_dim)
 
         self.res = (img_size // patch_size, img_size // patch_size)
+        conv = dict(lpu_mode=lpu_mode, lpu_kernel=lpu_kernel, use_irffn=use_irffn)
 
         self.stage1 = nn.Sequential(
-            SwinTransformerBlock(dim=embed_dim, res=self.res, win=window_size, shift=0),
-            SwinTransformerBlock(dim=embed_dim, res=self.res, win=window_size, shift=window_size // 2)
+            SwinTransformerBlockConv(dim=embed_dim, res=self.res, win=window_size, shift=0, **conv),
+            SwinTransformerBlockConv(dim=embed_dim, res=self.res, win=window_size, shift=window_size // 2, **conv)
         )
         self.merge1 = PatchMerging(dim=embed_dim)
 
         self.stage2 = nn.Sequential(
-            SwinTransformerBlock(dim=embed_dim * 2, res=(self.res[0] // 2, self.res[1] // 2), win=window_size, shift=0),
-            SwinTransformerBlock(dim=embed_dim * 2, res=(self.res[0] // 2, self.res[1] // 2), win=window_size,
-                                 shift=window_size // 2)
+            SwinTransformerBlockConv(dim=embed_dim * 2, res=(self.res[0] // 2, self.res[1] // 2),
+                                     win=window_size, shift=0, **conv),
+            SwinTransformerBlockConv(dim=embed_dim * 2, res=(self.res[0] // 2, self.res[1] // 2),
+                                     win=window_size, shift=window_size // 2, **conv)
         )
         self.merge2 = PatchMerging(dim=embed_dim * 2)
 
