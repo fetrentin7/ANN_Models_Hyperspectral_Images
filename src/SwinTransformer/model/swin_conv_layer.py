@@ -1,7 +1,5 @@
 import torch.nn as nn
 
-import torch.nn as nn
-
 class LPU(nn.Module):
     def __init__(self, dim, mode="2d", kernel=3):
         super().__init__()
@@ -24,19 +22,28 @@ class LPU(nn.Module):
         return x + y
 
 class IRFFN(nn.Module):
-    def __init__(self, dim, ratio=4.0):
+    def __init__(self, dim, ratio=4.0, mode="2d", kernel=3):
         super().__init__()
         hidden = int(dim * ratio)
+        self.mode = mode
         self.fc1 = nn.Linear(dim, hidden)
-        self.dw = nn.Conv2d(hidden, hidden, 3, padding=1, groups=hidden)
-        self.bn = nn.BatchNorm2d(hidden)
+        if mode == "2d":
+            self.dw = nn.Conv2d(hidden, hidden, kernel, padding=kernel // 2, groups=hidden)
+            self.bn = nn.BatchNorm2d(hidden)
+        else:
+            self.dw = nn.Conv1d(hidden, hidden, kernel, padding=kernel // 2, groups=hidden)
+            self.bn = nn.BatchNorm1d(hidden)
+
         self.fc2 = nn.Linear(hidden, dim)
         self.act = nn.GELU()
 
     def forward(self, x, h, w):
         x = self.act(self.fc1(x))
         b, l, c = x.shape
-        y = x.transpose(1, 2).reshape(b, c, h, w)
-        y = self.act(self.bn(self.dw(y))).flatten(2).transpose(1, 2)
-        x = x + y
-        return self.fc2(x)
+        if self.mode == "2d":
+            y = x.transpose(1, 2).reshape(b, c, h, w)
+            y = self.act(self.bn(self.dw(y))).flatten(2).transpose(1, 2)
+        else:
+            y = x.transpose(1, 2)
+            y = self.act(self.bn(self.dw(y))).transpose(1, 2)
+        return self.fc2(x + y)

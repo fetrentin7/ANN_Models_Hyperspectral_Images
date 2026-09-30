@@ -8,7 +8,7 @@ from model.output_layer import OutputLayer
 from model.enconding_conv import SwinTransformerBlockConv
 class SwinTransformer(nn.Module):
     def __init__(self, in_channels, num_classes, img_size=32, patch_size=4,
-                 embed_dim=96, window_size=4, lpu_mode=None, lpu_kernel=3, use_irffn=False):
+                 embed_dim=96, window_size=4, lpu_mode=None, lpu_kernel=3, irffn_mode=None):
 
         super().__init__()
 
@@ -16,8 +16,7 @@ class SwinTransformer(nn.Module):
                                       in_channels=in_channels, embed_dim=embed_dim)
 
         self.res = (img_size // patch_size, img_size // patch_size)
-        conv = dict(lpu_mode=lpu_mode, lpu_kernel=lpu_kernel, use_irffn=use_irffn)
-
+        conv = dict(lpu_mode=lpu_mode, lpu_kernel=lpu_kernel, irffn_mode=irffn_mode)
         self.stage1 = nn.Sequential(
             SwinTransformerBlockConv(dim=embed_dim, res=self.res, win=window_size, shift=0, **conv),
             SwinTransformerBlockConv(dim=embed_dim, res=self.res, win=window_size, shift=window_size // 2, **conv)
@@ -94,3 +93,7 @@ class SwinTransformer(nn.Module):
 #print(out.shape)
 
 
+for mode, k in [(None, 3), ("2d", 3), ("1d", 3)]:
+    net = SwinTransformer(in_channels=50, num_classes=16, img_size=64,
+                          lpu_mode=mode, lpu_kernel=k)
+    print(mode, k, sum(p.numel() for p in net.parameters()))

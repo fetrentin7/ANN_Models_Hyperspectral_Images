@@ -8,7 +8,7 @@ from ANN_Models_Hyperspectral_Images.src.SwinTransformer.model.swin_conv_layer i
 
 class SwinTransformerBlockConv(nn.Module):
 
-    def __init__(self, dim, res, win, shift, lpu_mode=None, lpu_kernel=3, use_irffn=False):
+    def __init__(self, dim, res, win, shift, lpu_mode=None, lpu_kernel=3, irffn_mode=None):
         super().__init__()
         self.dim = dim
         self.res = res
@@ -17,12 +17,11 @@ class SwinTransformerBlockConv(nn.Module):
 
         self.lpu = LPU(dim, mode=lpu_mode, kernel=lpu_kernel) if lpu_mode else None
 
-        self.use_irffn = use_irffn
-        if use_irffn:
-            self.mlp = IRFFN(dim, ratio=4.0)
+        self.use_irffn = bool(irffn_mode)
+        if irffn_mode:
+            self.mlp = IRFFN(dim, ratio=4.0, mode=irffn_mode)
         else:
-            self.mlp = nn.Sequential(nn.Linear(dim, 4 * dim),nn.GELU(),nn.Linear(4 * dim, dim))
-
+            self.mlp = nn.Sequential(nn.Linear(dim, 4 * dim), nn.GELU(), nn.Linear(4 * dim, dim))
         self.shift = shift
         H, W = res
         if shift > 0:
